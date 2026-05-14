@@ -230,7 +230,7 @@ An interactive Power BI dashboard is included alongside the SQL analysis, visual
 - High-value customer risk segmentation
 
 > **Dashboard file:** 
-> 
+> ![telecom_dashboard](Assets/telecom_dashboard.png)
 
 
 ---
