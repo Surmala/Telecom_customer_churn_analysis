@@ -1,9 +1,12 @@
-# 📡 Maven Telecom Customer Churn Analysis — SQL & POWER BI
-This project analyses customer churn data for a telecom company "Maven" using SQL queries and Power BI.
-The goal is to identify churn patterns ,revenue loss,customer behaviour and business insights that can help improve customer retention strategies.
+# 📡 Telecom Customer Churn Analysis — SQL + Power BI
+
+A structured end-to-end data analysis project uncovering churn drivers, revenue loss, and retention opportunities for a telecom company -Maven . The workflow covers data ingestion, cleaning, SQL analysis, and an interactive Power BI dashboard.
+
+---
 
 ## 📌 Project Objective
-To identify **why customers leave**, **who is most at risk**, and **what the business can do** to reduce churn and protect revenue — using SQL on a raw customer dataset.
+
+To identify **why customers leave**, **who is most at risk**, and **what the business can do** to reduce churn and protect revenue.
 
 ---
 
@@ -23,62 +26,92 @@ To identify **why customers leave**, **who is most at risk**, and **what the bus
 | `Offer` | Promotional offer applied to the customer |
 | `City` | Customer location |
 
-> **Total customers:** 4,835  **Churned:** 1,586
+> **Total customers:** 7,043  **Churned:** 1,869
 
----**Data source:** [Maven Analytics Data Playground](https://mavenanalytics.io/data-playground/telecom-customer-churn)
+**Data source:** [Maven Analytics Data Playground] https://mavenanalytics.io/data-playground/telecom-customer-churn
+
+---
+
+## 🧹 Data Quality & Integrity
+
+### Null values — a deliberate decision
+
+This dataset contains null values across several columns. Because every customer has a unique combination of subscription preferences, nulls are **expected and meaningful** — not errors. For example, a customer with no active offer will have `NULL` in the `Offer` column, not the string "None". Removing or imputing these nulls would distort the analysis.
+
+> Null values in this dataset are a deliberate and informed decision that allows for a more nuanced and complete understanding of the customer base.
+
+`COALESCE` was used where null labels needed to be made readable in output:
+```sql
+SELECT COALESCE(Offer, 'No Offer') AS Offer, ...
+```
+
+### Duplicate check
+
+Verified that `Customer_ID` is truly unique — no duplicate records found.
+
+```sql
+-- Check for duplicates
+SELECT Customer_ID, COUNT(Customer_ID) AS count
+FROM telecom_customer_churn
+GROUP BY Customer_ID
+HAVING COUNT(Customer_ID) > 1;
+
+-- Total number of customers
+SELECT COUNT(DISTINCT Customer_ID) AS customer_count
+FROM telecom_customer_churn;
+```
+
+**Result:** No duplicates found. Total unique customers: **7,043**.
+
+### Data ingestion note
+
+The MySQL Workbench import wizard initially returned only 4,835 rows due to a column mapping error and an incomplete import. The discrepancy was caught by cross-validating the row count against the source CSV and Power BI. The full 7,043-row dataset was successfully loaded using a Python ingestion script with `pandas` and `SQLAlchemy`.
+
+---
 
 ## ❓ Recommended Analysis Questions
 
 *From Maven Analytics — the guiding framework for this project:*
 
-1. How many customers joined the company during the last quarter? How many customers joined?
+1. How many customers joined the company during the last quarter?
 2. What is the customer profile for a customer that churned, joined, and stayed? Are they different?
 3. What seem to be the key drivers of customer churn?
 4. Is the company losing high value customers? If so, how can they retain them?
 
 ---
-## Data Cleaning and preparation:
-Null values — a deliberate decision
-This dataset  may contains null values across several columns. Because every customer has a unique combination of subscription preferences, nulls are expected and meaningful — not errors. For example, a customer without an internet plan will naturally have no value for `Internet_Type`. Removing or imputing these nulls would distort the analysis.
- >  Null values in this dataset are a deliberate and informed decision that allows for a more nuanced and complete understanding of the customer base.
-Duplicate check
-Verified that `Customer_ID` is truly unique — no duplicate records found.
-```sql
---   Check for duplicates
-SELECT Customer_ID,COUNT(Customer_ID) AS Count
-FROM telecom_customer_churn
-GROUP BY Customer_ID
-HAVING COUNT(Customer_ID)>1;
 
-
--- Total number of customers
-SELECT
-COUNT(DISTINCT Customer_ID) AS counts_of_customer
-FROM telecom_customer_churn;
-```
-Result: No duplicates found. Total unique customers: 4,835.
+## 🔍 Key Business Questions Answered
 
 ### 1. How many customers joined in the last quarter?
 > Customers with `Tenure_in_Months ≤ 3` are treated as last-quarter joiners.
 
-**Result:** 693 new customers joined in the last quarter.
+```sql
+SELECT COUNT(*) AS customers_joined_last_quarter
+FROM telecom_customer_churn
+WHERE Tenure_in_Months <= 3;
+```
+
+**Result:** **1,051** new customers joined in the last quarter.
+
+---
 
 ### 2. What is the customer profile for churned, joined, and stayed customers?
 
-Customers were compared across contract type, offers, tech support, and internet type by their `Customer_Status`.
+Customers were compared across contract type, offers, tech support, and internet type by `Customer_Status`.
 
 | Profile Attribute | Churned | Stayed | Joined |
 |---|---|---|---|
-| Dominant contract | Month-to-Month (88.5%) | Longer-term plans | Month-to-Month |
-| Tech support | 82.2% had none | Higher premium support | Mostly none |
-| Internet type | Fiber Optic (77.9%) | Mixed | Mixed |
-| Active offer | 57.1% had no offer | More likely to have offers | New offers at sign-up |
+| Dominant contract | Month-to-Month (88.6%) | Longer-term plans | Month-to-Month |
+| Tech support | 77.4% had none | Higher premium support | Mostly none |
+| Internet type | Fiber Optic (66.1%) | Mixed | Mixed |
+| Active offer | 56.2% had no active offer | More likely to have offers | New offers at sign-up |
 
 **Key finding:** Churned customers are disproportionately on flexible month-to-month contracts, without promotional offers or premium support — the opposite of retained customers.
 
 ---
 
 ### 3. How much revenue was lost to churned customers?
+
 ```sql
 SELECT Customer_Status,
        COUNT(Customer_ID) AS customer_count,
@@ -86,21 +119,23 @@ SELECT Customer_Status,
 FROM telecom_customer_churn
 GROUP BY Customer_Status;
 ```
-**Result:** Churned customers (1,586) accounted for **19.4% of total revenue**.
+
+**Result:** Churned customers (1,869) accounted for **17.2% of total revenue**.
 
 ---
 
 ### 4. What is the typical tenure before churning?
+
 Churners were grouped into tenure buckets using a `CASE` expression.
 
-**Result:** **~39.2% of churners left within the first 6 months** — the highest-risk window.
+**Result:** **~41.9% of churners left within the first 6 months** — the highest-risk window.
 
 | Tenure Bucket | Churn % |
 |---|---|
-| ≤ 6 months | 39.2% |
+| ≤ 6 months | 41.9% |
 | ≤ 1 year | ~21% |
 | ≤ 2 years | ~18% |
-| > 2 years | ~21% |
+| > 2 years | ~19% |
 
 ---
 
@@ -108,6 +143,8 @@ Churners were grouped into tenure buckets using a `CASE` expression.
 
 ```sql
 SELECT City,
+       COUNT(CASE WHEN Customer_Status='Churned' THEN 1 END) AS Churned_Customers,
+       COUNT(*) AS total_customers,
        ROUND(COUNT(CASE WHEN Customer_Status='Churned' THEN 1 END) * 100.0 / COUNT(*), 2) AS Churn_rate_pct
 FROM telecom_customer_churn
 GROUP BY City
@@ -115,22 +152,24 @@ HAVING COUNT(*) > 30
 ORDER BY Churn_rate_pct DESC
 LIMIT 1;
 ```
-**Result:** **San Diego** leads with a **65% churn rate** — over half the customer base there has left.
+
+**Result:** **San Diego** leads with a **64.91% churn rate** — nearly two-thirds of its customer base has left.
 
 ---
 
 ### 6. Why did customers leave? *(Key churn drivers)*
 
 **By category:**
+
 | Churn Category | % of Churners |
 |---|---|
-| Competitor | 47% |
-| Attitude | 16% |
-| Dissatisfaction | ~15% |
-| Price | ~11% |
+| Competitor | 44% |
+| Attitude | 17% |
+| Dissatisfaction | ~16% |
+| Price | ~12% |
 | Other | ~11% |
 
-**Top specific reasons:**
+**Top 3 specific reasons:**
 1. Competitor had better devices
 2. Competitor made a better offer
 3. Attitude of support person
@@ -139,37 +178,44 @@ LIMIT 1;
 
 ### 7. Did churners have premium tech support?
 
-**Result:** **82.2% of churners had no premium tech support** — a strong signal that tech support access correlates with retention.
+**Result:** **77.4% of churners had no premium tech support** — a strong signal that tech support access correlates with retention.
 
 ---
 
 ### 8. What offers were churners on?
 
-**Result:** **57.1% of churners had no active offer** at the time of leaving, and **20.8% were on Offer E**.
+```sql
+SELECT COALESCE(Offer, 'No Offer') AS Offer,
+       ROUND(COUNT(*) * 100 / SUM(COUNT(*)) OVER(), 1) AS churned_pct
+FROM telecom_customer_churn
+WHERE Customer_Status = 'Churned'
+GROUP BY COALESCE(Offer, 'No Offer')
+ORDER BY churned_pct DESC;
+```
+
+**Result:** **56.2% of churners had no active offer**, and **22.8% were on Offer E**.
 
 ---
 
 ### 9. What internet type did churners use?
 
-**Result:** **77.9% of all churners used Fiber Optic** — and that number rises to **78.9% among those who left for a competitor specifically**.
+**Result:** **66.1% of all churners used Fiber Optic** — rising to **69.8% among those who left specifically for a competitor**.
 
 ---
 
 ### 10. What contract type were churners on?
 
-**Result:** **88.5% of churned customers were on a Month-to-Month contract**, confirming that contract length is a strong churn predictor.
+**Result:** **88.6% of churned customers were on a Month-to-Month contract**, confirming that contract length is a strong churn predictor.
 
 ---
 
 ### 11. Is the company losing high-value customers?
 
-Churned customers were segmented by revenue contribution to identify whether premium spenders are leaving.
-
-**Result:** Churned customers accounted for **19.4% of total revenue** despite being only ~33% of the customer base — indicating that churners are, on average, higher spenders than retained customers.
+Churned customers accounted for **17.2% of total revenue** while representing ~26.5% of the customer base — indicating churners spend above average compared to retained customers.
 
 **Retention recommendations for high-value customers:**
-- Proactively offer long-term contract discounts before they lapse to month-to-month
-- Prioritize premium tech support bundling for high-revenue Fiber Optic customers
+- Proactively offer long-term contract discounts before customers lapse to month-to-month
+- Prioritize premium tech support bundling for Fiber Optic customers
 - Flag high-value accounts in San Diego and similar high-churn cities for personal outreach
 
 ---
@@ -183,8 +229,9 @@ An interactive Power BI dashboard is included alongside the SQL analysis, visual
 - Customer profile comparison — churned vs. stayed vs. joined
 - High-value customer risk segmentation
 
-> **Dashboard file:** `telecom_churn_dashboard.pbix`
+> **Dashboard file:** 
 > 
+
 
 ---
 
@@ -192,17 +239,51 @@ An interactive Power BI dashboard is included alongside the SQL analysis, visual
 
 | Insight | Recommendation |
 |---|---|
-| 39% of churners left within 6 months | Introduce onboarding offers or check-in calls in the first 90 days |
-| 88.5% of churners were on month-to-month plans | Incentivize annual contract sign-ups at onboarding |
-| 82.2% had no premium tech support | Bundle basic tech support into standard plans |
-| 47% left for a competitor | Conduct competitive benchmarking on device offers and pricing |
-| San Diego churn rate is 65% | Investigate local competitor activity or service quality issues in that market |
-| 77.9% of churners used Fiber Optic | Audit Fiber Optic service quality and pricing competitiveness |
+| 41.9% of churners left within 6 months | Introduce onboarding offers and check-in calls in the first 90 days |
+| 88.6% of churners were on month-to-month plans | Incentivize annual contract upgrades at onboarding |
+| 77.4% had no premium tech support | Bundle basic tech support into standard plans |
+| 44% left for a competitor | Conduct competitive benchmarking on device offers and pricing |
+| San Diego churn rate is 64.91% | Investigate local competitor activity or service quality issues in that market |
+| 66.1% of churners used Fiber Optic | Audit Fiber Optic service quality and pricing competitiveness |
+
+---
+
+## 🛠️ Tech Stack
+
+- **Data ingestion:** Python (Pandas, SQLAlchemy, PyMySQL)
+- **Database:** MySQL
+- **Visualisation:** Power BI
+- **Skills demonstrated:** Data pipeline building, data cleaning, window functions (`OVER()`), `CASE` expressions, `COALESCE` for null handling, aggregation, duplicate detection, conditional counting, percentage calculations, KPI dashboard design
+
+---
+
+## 📁 File Structure
+
+```
+telecom-churn-analysis/
+│
+├── README.md
+├── data_ingestion.ipynb              # Python notebook — CSV to MySQL pipeline
+├── telecom_churn_analysis.sql        # All queries in sequence
+└── telecom_churn_dashboard.pbix      # Power BI dashboard
+```
 
 ---
 
 
+Open `data_ingestion.ipynb` and run all cells. This loads the full 7,043-row CSV into MySQL using `pandas` and `SQLAlchemy`:
+
+```python
+import pandas as pd
+from sqlalchemy import create_engine
+
+df = pd.read_csv("telecom_customer_churn.csv")
+engine = create_engine("mysql+pymysql://root:yourpassword@localhost/telecom_customer_churn_analysis")
+df.columns = df.columns.str.replace(' ', '_')
+df.to_sql('telecom_customer_churn', con=engine, if_exists='replace', index=False)
+```
 
 
----
+
+
 
